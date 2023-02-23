@@ -698,12 +698,17 @@ class SettingsDialog(Gtk.Dialog):
             ("", None),
             ("800 × 600", (800, 600)),
             ("1600 × 1200", (1600, 1200)),
+            ("1920 × 1080", (1920, 1080)),
             ("A4 landscape (300ppi)", (3508, 2480)),
             ("A4 portrait (300ppi)", (2480, 3508)),
             ("A3 landscape (300ppi)", (4960, 3508)),
             ("A3 portrait (300ppi)", (3508, 4960)),
-            ("US-Letter landscape (300ppi)", (3300, 2550)),
-            ("US-Letter portrait (300ppi)", (2550, 3300)),
+            ("A2 landscape (300ppi)", (7016, 4961)),
+            ("A2 portrait (300ppi)", (4961, 7016)),
+            ("A1 landscape (300ppi)", (9933, 7016)),
+            ("A1 portrait (300ppi)", (7016, 9933)),
+            ("A0 landscape (300ppi)", (14043, 9933)),
+            ("A0 portrait (300ppi)", (9933, 14043))
         )
 
         def apply_template(combo):
