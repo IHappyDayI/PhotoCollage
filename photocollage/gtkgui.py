@@ -129,22 +129,25 @@ class UserCollage:
     def __init__(self, photolist):
         self.photolist = photolist
 
-    def make_page(self, out_h, out_w):
+    def make_page(self, out_h, out_w, desired_num_columns):
         # Define the output image height / width ratio
         ratio = 1.0 * out_h / out_w
 
-        # Compute a good number of columns. It depends on the ratio, the number
-        # of images and the average ratio of these images. According to my
-        # calculations, the number of column should be inversely proportional
-        # to the square root of the output image ratio, and proportional to the
-        # square root of the average input images ratio.
-        avg_ratio = (sum(1.0 * photo.h / photo.w for photo in self.photolist) /
-                     len(self.photolist))
-        # Virtual number of images: since ~ 1 image over 3 is in a multi-cell
-        # (i.e. takes two columns), it takes the space of 4 images.
-        # So it's equivalent to 1/3 * 4 + 2/3 = 2 times the number of images.
-        virtual_no_imgs = 2 * len(self.photolist)
-        no_cols = int(round(math.sqrt(avg_ratio / ratio * virtual_no_imgs)))
+        if desired_num_columns == 0:
+            # Compute a good number of columns. It depends on the ratio, the number
+            # of images and the average ratio of these images. According to my
+            # calculations, the number of column should be inversely proportional
+            # to the square root of the output image ratio, and proportional to the
+            # square root of the average input images ratio.
+            avg_ratio = (sum(1.0 * photo.h / photo.w for photo in self.photolist) /
+                        len(self.photolist))
+            # Virtual number of images: since ~ 1 image over 3 is in a multi-cell
+            # (i.e. takes two columns), it takes the space of 4 images.
+            # So it's equivalent to 1/3 * 4 + 2/3 = 2 times the number of images.
+            virtual_no_imgs = 2 * len(self.photolist)
+            no_cols = int(round(math.sqrt(avg_ratio / ratio * virtual_no_imgs)))
+        else:
+            no_cols = desired_num_columns
 
         self.page = collage.Page(1.0, ratio, no_cols)
         random.shuffle(self.photolist)
@@ -170,6 +173,7 @@ class PhotoCollageWindow(Gtk.Window):
         super(PhotoCollageWindow, self).__init__(title=_("PhotoCollage"))
         self.history = []
         self.history_index = 0
+        self.desired_num_columns = 0
 
         self.opts = options_manager
         # load if options_manager file exists
@@ -221,19 +225,31 @@ class PhotoCollageWindow(Gtk.Window):
             Gtk.STOCK_UNDO, Gtk.IconSize.LARGE_TOOLBAR))
         self.btn_undo.connect("clicked", self.select_prev_layout)
         box.pack_start(self.btn_undo, False, False, 0)
+
         self.lbl_history_index = Gtk.Label(" ")
         box.pack_start(self.lbl_history_index, False, False, 0)
+
         self.btn_redo = Gtk.Button()
         self.btn_redo.set_image(Gtk.Image.new_from_stock(
             Gtk.STOCK_REDO, Gtk.IconSize.LARGE_TOOLBAR))
         self.btn_redo.connect("clicked", self.select_next_layout)
         box.pack_start(self.btn_redo, False, False, 0)
+
+        label = Gtk.Label(_("Columns:"), xalign=0)
+        box.pack_start(label, False, False, 0)
+        self.etr_cols = Gtk.Entry(text=str(self.desired_num_columns))
+        self.etr_cols.connect("changed", self.update_desired_columns)
+        self.etr_cols.last_valid_text = self.etr_cols.get_text()
+        self.etr_cols.set_width_chars(2)
+        box.pack_start(self.etr_cols, False, False, 0)
+
         self.btn_new_layout = Gtk.Button(label=_("Regenerate"))
         self.btn_new_layout.set_image(Gtk.Image.new_from_stock(
             Gtk.STOCK_REFRESH, Gtk.IconSize.LARGE_TOOLBAR))
         self.btn_new_layout.set_always_show_image(True)
         self.btn_new_layout.connect("clicked", self.regenerate_layout)
         box.pack_start(self.btn_new_layout, False, False, 0)
+
         self.btn_reset = Gtk.Button(label=_("Reset"))
         self.btn_reset.set_image(Gtk.Image.new_from_stock(
             Gtk.STOCK_REMOVE, Gtk.IconSize.LARGE_TOOLBAR))
@@ -291,7 +307,8 @@ class PhotoCollageWindow(Gtk.Window):
             if len(photolist) > 0:
                 new_collage = UserCollage(photolist)
                 new_collage.make_page(out_h=self.opts.out_h,
-                                      out_w=self.opts.out_w)
+                                      out_w=self.opts.out_w,
+                                      desired_num_columns=self.desired_num_columns)
                 self.render_from_new_collage(new_collage)
             else:
                 self.update_tool_buttons()
@@ -378,11 +395,14 @@ class PhotoCollageWindow(Gtk.Window):
             compdialog.destroy()
 
     def reset(self, button):
-        win.img_preview.collage.photolist = None
+        if (hasattr(win.img_preview, 'collage')):
+            win.img_preview.collage.photolist = None
         win.img_preview.image = None
         win.img_preview.mode = win.img_preview.INSENSITIVE
         win.img_preview.parent.history_index = len(win.img_preview.parent.history)
         win.img_preview.parent.update_tool_buttons()
+        self.desired_num_columns=0
+        self.etr_cols.set_text('0')
 
     def render_from_new_collage(self, collage):
         self.history.append(collage)
@@ -393,7 +413,8 @@ class PhotoCollageWindow(Gtk.Window):
     def regenerate_layout(self, button=None):
         new_collage = self.history[self.history_index].duplicate()
         new_collage.make_page(out_h=self.opts.out_h,
-                              out_w=self.opts.out_w)
+                              out_w=self.opts.out_w,
+                              desired_num_columns=self.desired_num_columns)
         self.render_from_new_collage(new_collage)
 
     def select_prev_layout(self, button):
@@ -416,6 +437,16 @@ class PhotoCollageWindow(Gtk.Window):
                 self.render_preview()
         else:
             dialog.destroy()
+
+    def update_desired_columns(self, entry):
+        entry_text = entry.get_text() or '0'
+        try:
+            int(entry_text)
+            entry.last_valid_text = entry_text
+            self.desired_num_columns=int(entry_text)
+        except ValueError:
+            entry.set_text(entry.last_valid_text)
+            self.desired_num_columns=int(entry.last_valid_text)
 
     def save_poster(self, button):
         collage = self.history[self.history_index]
@@ -626,7 +657,8 @@ class ImagePreviewArea(Gtk.DrawingArea):
                 self.collage.photolist.remove(cell.photo)
                 if self.collage.photolist:
                     self.collage.make_page(out_h=self.parent.opts.out_h,
-                                           out_w=self.parent.opts.out_w)
+                                           out_w=self.parent.opts.out_w,
+                                           desired_num_columns=self.parent.desired_num_columns)
                     self.parent.render_from_new_collage(self.collage)
                 else:
                     self.image = None
